@@ -1,0 +1,39 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.spec
+__pycache__/
+*.pyc
+
+# Security test reports (contain attack prompts and results)
+tests/adversarial_report_*.json
+tests/xti_report_*.json
+tests/archie_*.json
+tests/zephyr_*.json
+
+# Battle test workspaces (test fixtures)
+tests/battle_workspace/
+tests/battle_project/
+
+# Integrity manifest (installation-specific)
+.yopj.manifest
+
+# Config and memory (user-specific)
+.yopj.toml
+MEMORY.md
+lessons/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# Checkpoint files
+.yopj-checkpoint.json
+
+# Plugins (user-specific)
+plugins/

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yopj"
+version = "0.16.0"
+description = "Your Own Personal Jean-Luc — a local AI coding agent powered by llama.cpp"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+authors = [{name = "The YOPJ Project"}]
+keywords = ["ai", "agent", "coding", "llm", "llama-cpp", "local"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+]
+
+[project.urls]
+Homepage = "https://github.com/WayneCider/YourOwnPersonalJean-Luc"
+
+[project.scripts]
+yopj = "yopj:main"
+
+[tool.setuptools.packages.find]
+include = ["core*", "tools*", "learning*", "ui*"]
+
+[tool.setuptools]
+py-modules = ["yopj"]
