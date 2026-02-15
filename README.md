@@ -227,18 +227,6 @@ memory_dir = "."
 --dangerously-skip-permissions  Auto-allow all tool calls
 ```
 
-## Security
-
-YOPJ includes a security sandbox that validates all tool operations:
-
-- **Command blocklist:** Blocks `rm -rf`, `curl | sh`, `format C:`, `shutdown`, fork bombs, and other dangerous patterns.
-- **Path confinement:** In strict mode (`--strict-sandbox`), file operations are restricted to the working directory.
-- **Output limits:** Command output truncated at 1MB to prevent memory exhaustion. Tool results capped at 50K chars to prevent context explosion.
-- **Symlink detection:** Prevents directory traversal via symlinks in strict mode.
-- **Audit logging:** JSONL audit trail of all tool calls, permissions, generations, errors, confabulation flags, and context pressure events.
-- **Ctrl+C handling:** Cancels generation or tool execution gracefully without losing session state.
-- **Degenerate output detection:** Warns on repetition loops, encoding garbage, and empty/near-empty model responses.
-
 ## Architecture
 
 ```
@@ -292,6 +280,10 @@ YOPJ automatically manages the context window to prevent overflow:
 - **Auto-checkpoint:** Every 5 turns, conversation is saved to `.yopj-checkpoint.json` for crash recovery.
 
 ## Security
+
+> Jean-Luc is hardened against prompt injection and tool abuse in local single-agent environments.
+> Co-residency with other autonomous agents requires boot integrity verification and server trust checks.
+> See [SECURITY.md](SECURITY.md) for the full threat model, isolation requirements, and reporting policy.
 
 YOPJ includes an 8-layer security stack independently certified by two AI assessors (9.7/10 and 9.5/10, 260+ adversarial test cases, 0 exploitable breaches):
 
