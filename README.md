@@ -9,7 +9,7 @@ YOPJ connects to any GGUF model via [llama.cpp](https://github.com/ggerganov/lla
 - **Runs locally.** Your code never leaves your machine.
 - **Multi-model support.** 9 chat templates with auto-detection. Works with Qwen, Llama 3, Mistral, Gemma, Phi-3, and more.
 - **Think-block stripping.** Automatically strips `<think>...</think>` blocks from reasoning models (DeepSeek R1, QwQ) — both in batch and streaming mode.
-- **Learns from experience.** SEAL (Structured Experiential Apprenticeship Learning) captures reusable patterns from sessions and loads them into future conversations.
+- **Learns from experience.** SEAL (Self Evolving Adaptive Learning) captures reusable patterns from sessions and loads them into future conversations.
 - **Detects confabulation.** Built-in heuristics flag when the model is making things up.
 - **Detects degenerate output.** Warns on repetition loops, encoding garbage, and empty responses.
 - **Security sandbox.** Command blocklist, path confinement, output limits, and audit logging.
@@ -271,7 +271,7 @@ yopj/
 
 ## SEAL Learning
 
-SEAL (Structured Experiential Apprenticeship Learning) captures reusable patterns from coding sessions:
+SEAL (Self Evolving Adaptive Learning) captures reusable patterns from coding sessions:
 
 - **Auto-detection:** Identifies tool-failure-then-success sequences, high-round-count questions, and repeated errors.
 - **Manual capture:** Use `/learn topic | insight` to save specific knowledge.
