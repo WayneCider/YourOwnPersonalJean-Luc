@@ -235,6 +235,8 @@ _PROTECTED_PATH_PATTERNS = [
     "core\\sandbox.py",
     "core\\tool_protocol.py",
     "core\\permission_system.py",
+    "knowledge/",
+    "knowledge\\",
 ]
 
 # Auto-execution locations — file_write blocked here (Archie audit round 2)
