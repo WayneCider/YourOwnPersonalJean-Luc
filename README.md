@@ -107,6 +107,7 @@ YOPJ comes with 12 built-in tools:
 | `git_add` | Stage files |
 | `git_commit` | Create commits |
 | `git_branch` | List branches |
+| `web_fetch` | Fetch URL content for research (public docs only) |
 
 ### Custom Plugins
 
@@ -243,7 +244,7 @@ yopj/
 │   ├── plugin_loader.py       — User-extensible plugin system
 │   ├── audit_log.py           — Structured JSONL event logging
 │   └── project_detect.py      — Auto-detect project type from markers
-├── tools/                     — Built-in tool implementations (7 files)
+├── tools/                     — Built-in tool implementations (8 files)
 ├── learning/
 │   ├── seal_store.py          — SEAL lesson persistence + quality gates
 │   ├── session_learner.py     — Session pattern detection
@@ -253,8 +254,9 @@ yopj/
 │   └── cli.py                 — Terminal conversation loop with streaming
 ├── yopj.py                    — Entry point
 ├── pyproject.toml             — Package configuration (pip install)
+├── knowledge/                 — Attack pattern reference library (read-only)
 └── tests/
-    └── test_tools.py          — Test suite (167 tests)
+    └── test_tools.py          — Test suite (197 tests)
 ```
 
 ## SEAL Learning
