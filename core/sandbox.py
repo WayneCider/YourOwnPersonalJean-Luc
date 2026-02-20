@@ -342,6 +342,9 @@ class Sandbox:
         self.max_file_size = max_file_size
         self.max_output_size = max_output_size
         self.audit_log: list[dict] = []
+        # Callback for runtime path approval. When set, called with (resolved_path, operation)
+        # before denying access. If it returns True, the directory is added to allowed_dirs.
+        self.on_path_denied: callable = None
 
     def validate_path(self, path: str, operation: str = "read") -> dict:
         """Validate a file path for security.
@@ -449,11 +452,27 @@ class Sandbox:
                 for d in self.allowed_dirs
             )
             if not in_allowed:
-                self._audit("path_blocked", path, f"Outside allowed dirs: {resolved}")
-                return {
-                    "ok": False,
-                    "error": f"Path outside allowed directories: {path}",
-                }
+                # Runtime approval callback — ask operator before denying
+                approved = False
+                if self.on_path_denied is not None:
+                    try:
+                        approved = self.on_path_denied(resolved, operation)
+                    except Exception:
+                        approved = False
+                if approved:
+                    # Add the parent directory for this session
+                    new_dir = os.path.dirname(resolved) if os.path.isfile(resolved) else resolved
+                    new_dir = os.path.realpath(new_dir)
+                    if new_dir not in self.allowed_dirs:
+                        self.allowed_dirs.append(new_dir)
+                        self._audit("path_approved_runtime", path,
+                                    f"Operator approved: {new_dir}")
+                else:
+                    self._audit("path_blocked", path, f"Outside allowed dirs: {resolved}")
+                    return {
+                        "ok": False,
+                        "error": f"Path outside allowed directories: {path}",
+                    }
 
         # Symlink check
         if os.path.islink(path):

@@ -10,7 +10,11 @@ readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [{name = "The YOPJ Project"}]
+dependencies = []
 keywords = ["ai", "agent", "coding", "llm", "llama-cpp", "local"]
+
+[project.optional-dependencies]
+pdf = ["pdfplumber>=0.10.0"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

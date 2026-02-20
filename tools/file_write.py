@@ -29,6 +29,11 @@ def file_write(path: str, content: str) -> dict:
         if normalized != path:
             path = normalized
 
+    # If model passed a dict or list instead of a string, convert to JSON
+    if isinstance(content, (dict, list)):
+        import json as _json
+        content = _json.dumps(content, indent=2)
+
     sandbox = get_sandbox()
 
     # Security check

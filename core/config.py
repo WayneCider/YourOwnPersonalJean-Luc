@@ -31,6 +31,7 @@ DEFAULTS = {
     "llama_cli": None,
     "plugins_dir": None,
     "expected_model": None,
+    "extra_allowed_dirs": [],
 }
 
 # Config file search order (first found wins)
@@ -73,6 +74,18 @@ def _parse_toml(text: str) -> dict:
             result[key] = True
         elif value.lower() == "false":
             result[key] = False
+        elif value.startswith("[") and value.endswith("]"):
+            # Simple array of strings: ["a", "b", "c"]
+            inner = value[1:-1].strip()
+            if not inner:
+                result[key] = []
+            else:
+                items = []
+                for item in inner.split(","):
+                    item = item.strip().strip('"').strip("'")
+                    if item:
+                        items.append(item)
+                result[key] = items
         elif value.startswith('"') and value.endswith('"'):
             result[key] = value[1:-1]
         elif value.startswith("'") and value.endswith("'"):
@@ -219,4 +232,7 @@ timeout = 300
 # Security
 # strict_sandbox = false
 # dangerously_skip_permissions = false
+
+# Extra directories Jean-Luc can read/write (outside the main working directory)
+# extra_allowed_dirs = ["C:/Reference/DynamoPrimer", "C:/Projects"]
 '''
