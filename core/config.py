@@ -31,6 +31,7 @@ DEFAULTS = {
     "llama_cli": None,
     "plugins_dir": None,
     "expected_model": None,
+    "disabled_tools": "",
 }
 
 # Config file search order (first found wins)
@@ -172,6 +173,7 @@ def merge_cli_args(config: dict, args) -> dict:
         "dangerously_skip_permissions": "dangerously_skip_permissions",
         "llama_cli": "llama_cli",
         "plugins_dir": "plugins_dir",
+        "disable_tools": "disabled_tools",
     }
 
     for arg_name, config_key in mappings.items():
@@ -215,6 +217,9 @@ timeout = 300
 
 # Plugins
 # plugins_dir = "./plugins"
+
+# Disable optional tools (comma-separated)
+# disabled_tools = "screenshot_capture,pdf_read"
 
 # Security
 # strict_sandbox = false

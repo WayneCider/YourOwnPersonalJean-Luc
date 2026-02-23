@@ -57,19 +57,22 @@ TRUST_TIERS = {
     4: {
         "label": "Tools",
         "files": [
-            "tools/bash_exec.py",
-            "tools/file_read.py",
-            "tools/file_write.py",
-            "tools/file_edit.py",
-            "tools/git_tools.py",
-            "tools/grep_search.py",
-            "tools/glob_search.py",
+            "tools/core/bash_exec.py",
+            "tools/core/file_read.py",
+            "tools/core/file_write.py",
+            "tools/core/file_edit.py",
+            "tools/core/git_tools.py",
+            "tools/core/grep_search.py",
+            "tools/core/glob_search.py",
+            "tools/optional/web_fetch.py",
+            "tools/optional/pdf_read.py",
+            "tools/optional/screenshot_capture.py",
         ],
     },
 }
 
 # Directories to scan for unexpected files
-SECURITY_DIRS = ["core", "tools"]
+SECURITY_DIRS = ["core", "tools/core", "tools/optional"]
 
 
 class ManifestError(Exception):

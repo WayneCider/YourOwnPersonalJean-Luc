@@ -181,7 +181,7 @@ def query_by_topic_keyword(lessons_dir: str, keyword: str) -> list[dict]:
     return matches
 
 
-def load_lessons_for_prompt(lessons_dir: str, max_lessons: int = 10, min_confidence: float = 0.4) -> str:
+def load_lessons_for_prompt(lessons_dir: str, max_lessons: int = 15, min_confidence: float = 0.4) -> str:
     """Load active SEAL lessons and format them for system prompt injection.
 
     Returns a compact text block of lessons, sorted by confidence (highest first).

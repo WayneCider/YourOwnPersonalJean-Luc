@@ -10,6 +10,7 @@ Uses streaming output for real-time token display.
 """
 
 import atexit
+import msvcrt
 import os
 import re
 import sys
@@ -101,6 +102,130 @@ _BOLD = "\033[1m"
 _MAGENTA = "\033[35m"
 
 MAX_TOOL_ROUNDS = 10  # Safety limit on tool call loops
+LIVE_INPUT_FILE = "live_input.txt"
+LIVE_OUTPUT_FILE = "live_output.txt"
+
+# Context health thresholds (fraction of available tokens used)
+_CTX_GREEN = 0.50   # < 50% used — plenty of room
+_CTX_YELLOW = 0.70  # 50-70% — getting warm
+_CTX_ORANGE = 0.85  # 70-85% — generate continuity prompt soon
+_CTX_RED = 0.95     # > 85% — critical, force continuity now
+
+CONTINUITY_FILE = "continuity_prompt.json"
+RESTART_SIGNAL_FILE = "restart_signal.json"
+
+
+def _context_health_status(context) -> tuple:
+    """Return (status, fraction_used) for the context window.
+
+    Status is one of: GREEN, YELLOW, ORANGE, RED.
+    """
+    if not context:
+        return ("GREEN", 0.0)
+    usage = context.get_token_usage()
+    available = usage["available_tokens"]
+    if available <= 0:
+        return ("RED", 1.0)
+    used_fraction = 1.0 - (usage["headroom"] / available)
+    if used_fraction >= _CTX_RED:
+        return ("RED", used_fraction)
+    elif used_fraction >= _CTX_ORANGE:
+        return ("ORANGE", used_fraction)
+    elif used_fraction >= _CTX_YELLOW:
+        return ("YELLOW", used_fraction)
+    return ("GREEN", used_fraction)
+
+
+def _trigger_continuity(context, model, template, system_prompt, prompt_char_budget, transcript):
+    """Ask the model to generate a continuity summary, save it, and signal restart.
+
+    Returns True if continuity was triggered, False if it failed.
+    """
+    import json as _json
+
+    continuity_request = (
+        "[SYSTEM] Your context window is nearly full. Generate a CONTINUITY SUMMARY now. "
+        "This summary will be injected into your next session so you can resume seamlessly. "
+        "Format your response EXACTLY as follows — no other text:\n\n"
+        "TASK: [What you were working on — one sentence]\n"
+        "RESULTS: [Key results obtained so far — bullet points with exact values]\n"
+        "NEXT: [What you should do next — one sentence]\n"
+        "STATE: [Any important state: file paths, coordinates, structure names, network names]\n"
+    )
+
+    # Inject the request as a user message
+    if context:
+        context.add_message("user", continuity_request)
+
+    prompt = template_build_prompt(
+        context.get_messages() if context else [],
+        template,
+        system_prompt,
+        max_chars=prompt_char_budget,
+    )
+
+    print(f"\n{_YELLOW}  [Continuity] Generating session summary...{_RESET}")
+
+    if hasattr(model, "generate_stream"):
+        result = _stream_generate(model, prompt)
+    else:
+        result = model.generate(prompt)
+
+    if not result.get("ok") or not result.get("text"):
+        print(f"{_RED}  [Continuity] Failed to generate summary.{_RESET}")
+        return False
+
+    summary_text = result["text"].strip()
+    transcript.assistant(summary_text)
+    print(f"{_GREEN}  [Continuity] Summary captured.{_RESET}")
+
+    # Save continuity prompt
+    continuity_data = {
+        "schema": "continuity_v1",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "summary": summary_text,
+    }
+
+    try:
+        with open(CONTINUITY_FILE, "w", encoding="utf-8") as f:
+            _json.dump(continuity_data, f, indent=2)
+        print(f"{_GREEN}  [Continuity] Saved to {CONTINUITY_FILE}{_RESET}")
+    except OSError as e:
+        print(f"{_RED}  [Continuity] Failed to save: {e}{_RESET}")
+        return False
+
+    # Write restart signal
+    try:
+        with open(RESTART_SIGNAL_FILE, "w", encoding="utf-8") as f:
+            _json.dump({"reason": "continuity", "timestamp": time.time()}, f)
+        print(f"{_YELLOW}  [Continuity] Restart signal written. Exiting for reboot...{_RESET}")
+    except OSError:
+        pass
+
+    return True
+
+
+def _check_live_input(filepath=LIVE_INPUT_FILE):
+    """Check for live input from an external agent (e.g., WorkMarvin via Claude Code).
+
+    Protocol: writer creates <filepath>.tmp then renames to <filepath> for atomicity.
+    Reader reads and clears the file. Returns content string or None.
+    """
+    try:
+        if not os.path.exists(filepath):
+            return None
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        if not content:
+            return None
+        # Clear the file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            pass
+        return content
+    except OSError:
+        return None
+
+
 MAX_TOOL_RESULT_CHARS = 50_000  # Cap tool result size to prevent context explosion
 
 # Regex to strip <think>...</think> blocks from model output (DeepSeek R1, Qwen, etc.)
@@ -234,14 +359,54 @@ def run_cli(model, registry, system_prompt=None, permissions=None, context=None,
     last_prompt = None  # For /retry command
     undo_stack = []  # Stack of (path, backup_path) for /undo
 
+    # Resolve live input path to absolute now (while cwd is correct)
+    live_input_path = os.path.realpath(LIVE_INPUT_FILE)
+
     while True:
-        # Read user input (supports multi-line via """)
-        try:
-            user_input = input(f"{_GREEN}> {_RESET}").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            _show_exit_summary(learner, memory_dir=memory_dir, context=context, audit=audit)
-            print(f"{_DIM}Goodbye.{_RESET}")
+        # Poll keyboard and live_input simultaneously (no threading, no stdin conflicts)
+        sys.stdout.write(f"{_GREEN}> {_RESET}")
+        sys.stdout.flush()
+        _input_chars = []
+        user_input = None
+
+        while user_input is None:
+            # Check keyboard (non-blocking)
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch == '\r':  # Enter
+                    sys.stdout.write('\n')
+                    sys.stdout.flush()
+                    user_input = ''.join(_input_chars).strip()
+                elif ch == '\x08':  # Backspace
+                    if _input_chars:
+                        _input_chars.pop()
+                        sys.stdout.write('\x08 \x08')
+                        sys.stdout.flush()
+                elif ch == '\x03':  # Ctrl+C
+                    print()
+                    _show_exit_summary(learner, memory_dir=memory_dir, context=context, audit=audit)
+                    print(f"{_DIM}Goodbye.{_RESET}")
+                    user_input = "\x00EXIT"
+                elif ch in ('\x00', '\xe0'):  # Special key prefix (arrows, F-keys)
+                    msvcrt.getwch()  # consume second byte, ignore
+                elif ord(ch) >= 32:  # Printable character
+                    _input_chars.append(ch)
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+            else:
+                # No keyboard input — check live input file
+                live_msg = _check_live_input(live_input_path)
+                if live_msg:
+                    sys.stdout.write('\n')
+                    sys.stdout.flush()
+                    print(f"{_MAGENTA}[live input]{_RESET} {live_msg[:200]}")
+                    if len(live_msg) > 200:
+                        print(f"{_DIM}  ...({len(live_msg)} chars total){_RESET}")
+                    user_input = live_msg
+                else:
+                    time.sleep(0.1)  # 100ms poll interval
+
+        if user_input == "\x00EXIT":
             break
 
         if not user_input:
@@ -391,11 +556,47 @@ def run_cli(model, registry, system_prompt=None, permissions=None, context=None,
             _confab_check(model_text, audit=audit)
 
             if not tool_calls:
+                # Check for tool hallucination: model describes using a tool
+                # without actually generating ::TOOL syntax
+                _HALLUCINATION_RE = re.compile(
+                    r'I have (now )?(written|read|used|saved|created|executed|called)'
+                    r'|The (command|content|file) has been (written|saved|created)'
+                    r"|I've (written|read|used|saved|created)",
+                    re.IGNORECASE,
+                )
+                if _HALLUCINATION_RE.search(model_text) and round_num < 2:
+                    print(f"\n{_YELLOW}  [tool hallucination detected — re-prompting]{_RESET}")
+                    correction = (
+                        "[SYSTEM] You described using a tool but did NOT actually call it. "
+                        "You MUST output ::TOOL tool_name(args):: to use a tool. "
+                        "Saying 'I have written' does NOT write the file. "
+                        "Output the ::TOOL line now, nothing else."
+                    )
+                    if context:
+                        context.add_message("assistant", model_text)
+                        context.add_message("user", correction)
+                    conversation.append({"role": "assistant", "content": model_text})
+                    conversation.append({"role": "user", "content": correction})
+                    prompt = template_build_prompt(
+                        context.get_messages() if context else conversation,
+                        template,
+                        system_prompt,
+                        max_chars=prompt_char_budget,
+                    )
+                    continue  # Re-generate with correction
+
                 # No tool calls — final response (already streamed if streaming)
                 transcript.assistant(model_text)
                 if context:
                     context.add_message("assistant", model_text)
                 conversation.append({"role": "assistant", "content": model_text})
+
+                # Write response to live output for external agent consumption
+                try:
+                    with open(LIVE_OUTPUT_FILE, 'w', encoding='utf-8') as f:
+                        f.write(model_text)
+                except OSError:
+                    pass
                 if not use_streaming:
                     print(f"{_CYAN}{model_text}{_RESET}")
                 else:
@@ -570,16 +771,32 @@ def run_cli(model, registry, system_prompt=None, permissions=None, context=None,
         if learner:
             learner.record_turn_complete(round_num + 1)
 
-        # Token usage report
+        # Token usage report + context health monitoring
         if context:
             usage = context.get_token_usage()
             headroom = usage["headroom"]
-            if headroom < 500:
-                print(f"{_RED}  Warning: {headroom} tokens remaining{_RESET}")
+            status, fraction = _context_health_status(context)
+
+            # Status display
+            status_colors = {"GREEN": _GREEN, "YELLOW": _YELLOW, "ORANGE": _YELLOW, "RED": _RED}
+            status_color = status_colors.get(status, _RESET)
+            if status != "GREEN":
+                print(f"{status_color}  Context: {status} ({fraction:.0%} used, {headroom} tokens remaining){_RESET}")
+
             if audit and headroom < 1000:
                 audit.context_pressure(
                     usage["total_tokens"], headroom, usage["compressed_count"]
                 )
+
+            # Continuity trigger at ORANGE or RED
+            if status in ("ORANGE", "RED") and not os.path.exists(CONTINUITY_FILE):
+                triggered = _trigger_continuity(
+                    context, model, template, system_prompt,
+                    prompt_char_budget, transcript,
+                )
+                if triggered:
+                    print(f"\n{_YELLOW}  Jean-Luc will resume from continuity prompt on next boot.{_RESET}")
+                    return  # Exit the CLI loop — wrapper script handles restart
 
         # Auto-save checkpoint every 5 turns
         if context and learner and learner.turn_count > 0 and learner.turn_count % 5 == 0:
