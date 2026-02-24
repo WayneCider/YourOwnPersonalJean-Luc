@@ -6,10 +6,10 @@ dist/
 __pycache__/
 *.pyc
 
-# Security test reports (contain attack prompts and results)
+# Security test reports (generated output, not source)
 tests/adversarial_report_*.json
 tests/xti_report_*.json
-tests/archie_*.json
+tests/archie_report_*.json
 tests/zephyr_*.json
 
 # Battle test workspaces (test fixtures)
