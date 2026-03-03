@@ -2,7 +2,7 @@
 
 Checks model output for signs of hallucination using heuristics derived from
 R2's Phase 34 Anti-Confabulation Contract. Adapted from the MVP prototype
-at C:\\DevMarvin\\mvp\\confab_detector.py.
+at the original DevMarvin MVP (pre-YOPJ, early Feb 2026).
 
 Heuristics:
   H1: Specificity without source (numbers, dates, quotes without citations)

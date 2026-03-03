@@ -181,6 +181,106 @@ def query_by_topic_keyword(lessons_dir: str, keyword: str) -> list[dict]:
     return matches
 
 
+# Stopwords excluded from keyword matching
+_STOPWORDS = frozenset({
+    "the", "a", "an", "is", "it", "in", "on", "at", "to", "for", "of",
+    "and", "or", "not", "this", "that", "with", "from", "by", "as", "be",
+    "was", "are", "were", "been", "has", "have", "had", "do", "does", "did",
+    "will", "would", "could", "should", "can", "may", "might", "i", "you",
+    "we", "they", "he", "she", "my", "your", "our", "what", "how", "why",
+    "when", "where", "just", "like", "about", "some", "all", "any", "but",
+})
+
+
+def search_relevant_lessons(
+    lessons_dir: str,
+    query: str,
+    max_results: int = 3,
+    min_confidence: float = 0.4,
+) -> str:
+    """Search for SEAL lessons relevant to a user query using keyword matching.
+
+    Scores lessons by keyword overlap with topic (3x), tags (2.5x), and
+    summary (2x), weighted by confidence. Returns a formatted context block
+    for injection into the conversation, or empty string if no relevant matches.
+
+    Args:
+        lessons_dir: Directory containing SEAL lessons.
+        query: The user's message to match against.
+        max_results: Maximum lessons to return.
+        min_confidence: Minimum confidence threshold.
+    """
+    index = load_index(lessons_dir)
+
+    # Extract keywords from query
+    query_words = set()
+    for word in query.lower().split():
+        cleaned = word.strip(".,!?;:'\"()[]{}/-")
+        if cleaned and cleaned not in _STOPWORDS and len(cleaned) > 2:
+            query_words.add(cleaned)
+
+    if not query_words:
+        return ""
+
+    # Build reverse tag lookup: split hyphenated/underscored tags into words
+    tag_index = index.get("by_tag", {})
+    tag_words: dict[str, set[str]] = {}  # normalized word -> set of lesson_ids
+    for tag, ids in tag_index.items():
+        for part in tag.lower().replace("-", " ").replace("_", " ").split():
+            if part not in _STOPWORDS and len(part) > 2:
+                tag_words.setdefault(part, set()).update(ids)
+
+    # Score each active lesson
+    scored = []
+    for entry in index.get("lessons", []):
+        if entry.get("status") != "active":
+            continue
+        if entry.get("confidence", 0) < min_confidence:
+            continue
+
+        score = 0.0
+        topic_lower = entry.get("topic", "").lower()
+        summary_lower = entry.get("summary", "").lower()
+        lid = entry["lesson_id"]
+
+        for word in query_words:
+            if word in topic_lower:
+                score += 3.0
+            if word in summary_lower:
+                score += 2.0
+            if word in tag_words and lid in tag_words[word]:
+                score += 2.5
+
+        # Weight by confidence
+        score *= entry.get("confidence", 0.5)
+
+        if score > 0:
+            scored.append((score, entry))
+
+    if not scored:
+        return ""
+
+    # Sort by score descending, take top N
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    lines = []
+    for _score, entry in scored[:max_results]:
+        lesson = load_lesson(lessons_dir, entry["lesson_id"])
+        if not lesson:
+            continue
+        topic = lesson.get("topic", lesson.get("title", "unknown"))
+        insight = lesson.get("content", {}).get("insight", lesson.get("summary", ""))
+        if len(insight) > 150:
+            insight = insight[:147] + "..."
+        conf = int(lesson.get("confidence", 0) * 100)
+        lines.append(f"- [{topic}]: {insight} ({conf}%)")
+
+    if not lines:
+        return ""
+
+    return "[Relevant lessons]\n" + "\n".join(lines)
+
+
 def load_lessons_for_prompt(lessons_dir: str, max_lessons: int = 15, min_confidence: float = 0.4) -> str:
     """Load active SEAL lessons and format them for system prompt injection.
 

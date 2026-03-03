@@ -106,6 +106,8 @@ TOOL_SIGNATURES = {
     "web_fetch":          '::TOOL web_fetch(url, max_lines=200):: — Fetch a URL and return text content for research',
     "pdf_read":           '::TOOL pdf_read(path, pages=""):: — Read PDF file and extract text (supports page ranges, tables)',
     "screenshot_capture": '::TOOL screenshot_capture(save_path="", monitor=0):: — Capture screenshot of primary screen (Windows, saves PNG)',
+    "task_schedule":      '::TOOL task_schedule(action, subject="", task_id=0, description="", due="", status_filter="", cwd="."):: — Manage persistent task list (actions: add, list, complete, delete)',
+    "calendar_check":     '::TOOL calendar_check(days_ahead=7, include_completed=False, cwd="."):: — Check upcoming deadlines and calendar events',
 }
 
 
@@ -495,7 +497,7 @@ def main():
 
     # Load SEAL lessons into system prompt (self-improvement loop)
     if config["lessons_dir"]:
-        lessons_text = load_lessons_for_prompt(config["lessons_dir"])
+        lessons_text = load_lessons_for_prompt(config["lessons_dir"], max_lessons=5)
         if lessons_text:
             system_prompt += f"\n\n{lessons_text}"
             lesson_count = lessons_text.count("\n- [")

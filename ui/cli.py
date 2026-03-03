@@ -18,6 +18,7 @@ import shutil
 import time
 
 from core.chat_templates import ChatTemplate, build_prompt as template_build_prompt, CHATML
+from learning.seal_store import search_relevant_lessons
 
 
 class SessionTranscript:
@@ -440,11 +441,19 @@ def run_cli(model, registry, system_prompt=None, permissions=None, context=None,
                     continue
 
         if not is_retry:
-            # Add user message
+            # Add user message (with dynamic lesson recall if available)
             transcript.user(user_input)
+            context_input = user_input
+            lessons_dir = config.get("lessons_dir") if config else None
+            if lessons_dir and len(user_input) > 10:
+                lesson_context = search_relevant_lessons(lessons_dir, user_input)
+                if lesson_context:
+                    recalled = lesson_context.count("\n- [")
+                    print(f"{_DIM}  Recalled {recalled} lesson(s){_RESET}", file=sys.stderr)
+                    context_input = f"{lesson_context}\n\n{user_input}"
             if context:
-                context.add_message("user", user_input)
-            conversation.append({"role": "user", "content": user_input})
+                context.add_message("user", context_input)
+            conversation.append({"role": "user", "content": context_input})
 
             # Build prompt (with char budget to prevent ctx overflow)
             prompt = template_build_prompt(

@@ -1,8 +1,8 @@
 # YOPJ — Your Own Personal Jean-Luc — Blueprint
 
 **What:** A local AI coding agent with experiential learning, anti-confabulation, and ethical guardrails.
-**Who builds it:** R2 (architect + reviewer) via the self-improvement pipeline. DevMarvin scaffolds specs. 32B generates code.
-**Where:** `C:\DevMarvin\yopj\`
+**Who maintains it:** WorkMarvin (owner since Feb 20, 2026). Originally built via R2 pipeline (DevMarvin + 32B).
+**Repo:** https://github.com/WayneCider/YourOwnPersonalJean-Luc
 
 ---
 

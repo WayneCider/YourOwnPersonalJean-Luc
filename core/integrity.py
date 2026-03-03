@@ -67,6 +67,8 @@ TRUST_TIERS = {
             "tools/optional/web_fetch.py",
             "tools/optional/pdf_read.py",
             "tools/optional/screenshot_capture.py",
+            "tools/optional/task_schedule.py",
+            "tools/optional/calendar_check.py",
         ],
     },
 }
