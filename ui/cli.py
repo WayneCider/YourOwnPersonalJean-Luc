@@ -594,6 +594,32 @@ def run_cli(model, registry, system_prompt=None, permissions=None, context=None,
                     )
                     continue  # Re-generate with correction
 
+                # Domain fact guardrails: crash-critical/stubborn facts the
+                # fine-tune cannot reliably hold (SEAL 20260703_001)
+                guardrail_hits = _fact_guardrail_check(model_text, audit=audit)
+                block_hits = [h for h in guardrail_hits if h.action == "BLOCK"]
+                if block_hits and round_num < 2:
+                    hit = block_hits[0]
+                    print(f"\n{_YELLOW}  [fact guardrail {hit.rule_id}: {hit.detail} — re-prompting]{_RESET}")
+                    if context:
+                        context.add_message("assistant", model_text)
+                        context.add_message("user", hit.correction)
+                    conversation.append({"role": "assistant", "content": model_text})
+                    conversation.append({"role": "user", "content": hit.correction})
+                    prompt = template_build_prompt(
+                        context.get_messages() if context else conversation,
+                        template,
+                        system_prompt,
+                        max_chars=prompt_char_budget,
+                    )
+                    continue  # Re-generate with correction
+                elif block_hits:
+                    # Model refused the correction twice — never leave the
+                    # crash advice standing uncorrected
+                    for hit in block_hits:
+                        print(f"{_RED}  !! FACT GUARDRAIL {hit.rule_id} (persisted): {hit.detail}{_RESET}")
+                        model_text += hit.postscript
+
                 # No tool calls — final response (already streamed if streaming)
                 transcript.assistant(model_text)
                 if context:
@@ -895,6 +921,24 @@ def _stream_generate(model, prompt):
         sys.stdout.flush()
 
     return result
+
+
+def _fact_guardrail_check(text: str, audit=None) -> list:
+    """Run domain fact guardrails on a final answer; display WARN hits.
+
+    Returns the full hit list — the caller handles BLOCK hits (reprompt).
+    """
+    try:
+        from learning.fact_guardrails import scan_answer
+        hits = scan_answer(text)
+        for h in hits:
+            if h.action == "WARN":
+                print(f"{_MAGENTA}  ~ fact guardrail {h.rule_id}: {h.detail}{_RESET}")
+            if audit:
+                audit.error("fact_guardrail", f"{h.rule_id} ({h.action}): {h.detail} | {h.snippet}")
+        return hits
+    except Exception:
+        return []  # Guardrails must never break the CLI
 
 
 def _confab_check(text: str, audit=None) -> None:
